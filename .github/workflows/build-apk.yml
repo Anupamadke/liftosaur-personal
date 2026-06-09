@@ -29,6 +29,14 @@ jobs:
       - name: Install JS dependencies
         run: npm install --legacy-peer-deps
 
+      - name: Generate required source files
+        run: |
+          cp localdomain.default.js localdomain.js
+          node scripts/generate-theme-css.js
+          node scripts/build-markdown.js
+          TS_NODE_TRANSPILE_ONLY=1 npx ts-node scripts/build-exercises.ts
+          TS_NODE_TRANSPILE_ONLY=1 npx ts-node scripts/build-programs.ts
+
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
@@ -50,8 +58,7 @@ jobs:
             -dname "CN=Personal Build, OU=Personal, O=Personal, L=City, S=State, C=US"
 
       - name: Clear keystore.properties (use debug signing)
-        run: |
-          echo "" > android/keystore.properties
+        run: echo "" > android/keystore.properties
 
       - name: Make Gradlew executable
         run: chmod +x android/gradlew
