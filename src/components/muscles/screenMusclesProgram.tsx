@@ -1,0 +1,31 @@
+import type { JSX } from "react";
+import { IDispatch } from "../../ducks/types";
+import { Muscle_normalizePoints, Muscle_getPointsForProgram } from "../../models/muscle";
+import { ScreenMuscles } from "./screenMuscles";
+import { ISettings, IProgram } from "../../types";
+import { INavCommon } from "../../models/state";
+import { Program_evaluate } from "../../models/program";
+
+interface IProps {
+  dispatch: IDispatch;
+  settings: ISettings;
+  program: IProgram;
+  navCommon: INavCommon;
+}
+
+export function ScreenMusclesProgram(props: IProps): JSX.Element {
+  const evaluatedProgram = Program_evaluate(props.program, props.settings);
+  const points = Muscle_normalizePoints(
+    Muscle_getPointsForProgram(evaluatedProgram, props.navCommon.stats, props.settings)
+  );
+  return (
+    <ScreenMuscles
+      dispatch={props.dispatch}
+      settings={props.settings}
+      points={points}
+      navCommon={props.navCommon}
+      title={props.program.name}
+      helpKey="muscles"
+    />
+  );
+}

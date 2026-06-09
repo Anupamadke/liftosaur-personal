@@ -1,0 +1,104 @@
+import { JSX, useEffect, useRef } from "react";
+import UPlot from "uplot";
+import { IHistoryEntry } from "../../../types";
+import { GraphsPlugins_zoom } from "../../../utils/graphsPlugins";
+
+interface IProgramDetailsExerciseExampleGraphProps {
+  title: string;
+  yAxisLabel: string;
+  color: string;
+  weeksData: { label: string; entry: IHistoryEntry }[];
+  getValue: (entry: IHistoryEntry) => number;
+}
+
+export function ProgramDetailsExerciseExampleGraph(props: IProgramDetailsExerciseExampleGraphProps): JSX.Element {
+  const graphRef = useRef<HTMLDivElement>(null);
+  const legendRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!graphRef.current) {
+      return;
+    }
+    const rect = graphRef.current.getBoundingClientRect();
+    const opts: UPlot.Options = {
+      title: props.title,
+      class: "graph-program-details-example",
+      width: rect.width,
+      height: rect.height,
+      cursor: {
+        y: false,
+        lock: true,
+      },
+      legend: {
+        show: true,
+      },
+      series: [
+        {
+          label: "Week",
+        },
+        {
+          label: props.yAxisLabel,
+          value: (self, rawValue) => rawValue,
+          stroke: props.color,
+          width: 1,
+          spanGaps: true,
+        },
+      ],
+      plugins: [GraphsPlugins_zoom()],
+      scales: {
+        x: {
+          time: false,
+        },
+      },
+      axes: [
+        {
+          space: 20,
+          incrs: [1],
+        },
+      ],
+    };
+
+    const weekNumbers = props.weeksData.map((weekData) => {
+      const match = weekData.label.match(/\d+/);
+      return match ? parseInt(match[0], 10) : 0;
+    });
+
+    const data: [number[], number[]] = [
+      weekNumbers,
+      props.weeksData.map((weekData) => {
+        return props.getValue(weekData.entry);
+      }),
+    ];
+
+    const uplot = new UPlot(opts, data, graphRef.current!);
+
+    const underEl = graphRef.current!.querySelector(".over");
+    const underRect = underEl?.getBoundingClientRect();
+
+    function handler(): void {
+      function onMove(event: TouchEvent): void {
+        const offset = window.pageYOffset;
+        const touch = event.touches[0];
+        uplot.setCursor({ left: touch.clientX - underRect!.left, top: touch.clientY - underRect!.top + offset });
+      }
+
+      function onEnd(): void {
+        window.removeEventListener("touchmove", onMove);
+        window.removeEventListener("touchend", onEnd);
+      }
+
+      window.addEventListener("touchmove", onMove);
+      window.addEventListener("touchend", onEnd);
+    }
+
+    if (underEl != null) {
+      underEl.addEventListener("touchstart", handler);
+    }
+  }, []);
+
+  return (
+    <div className="relative z-0 pt-2" data-testid="graph">
+      <div className="w-full" data-testid="graph-data" style={{ height: "10em" }} ref={graphRef}></div>
+      <div data-testid="graph-legend" className="box-content px-8 pt-8 pb-2 text-sm" ref={legendRef}></div>
+    </div>
+  );
+}

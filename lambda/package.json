@@ -1,0 +1,13 @@
+{
+  "name": "liftosaur-lambda",
+  "version": "1.0.0",
+  "description": "Lambda for Liftosaur",
+  "scripts": {},
+  "author": "Anton Astashov",
+  "license": "MIT",
+  "dependencies": {
+    "@resvg/resvg-wasm": "^2.6.2",
+    "lens-shmens": "^1.6.0",
+    "sharp": "^0.34.5"
+  }
+}

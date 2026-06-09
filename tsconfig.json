@@ -1,0 +1,52 @@
+{
+  "ts-node": {
+    "files": true,
+    "require": ["./register-rn-web.js"]
+  },
+  "compilerOptions": {
+    "target": "es2015",
+    "lib": [
+      "esnext",
+      "dom",
+      "WebWorker"
+    ],
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "declaration": true,
+    "allowJs": true,
+    "noUnusedLocals": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "sourceMap": true,
+    "pretty": true,
+    "strict": true,
+    "jsx": "react-jsx",
+    "skipLibCheck": true,
+    "noEmit": true,
+    "outDir": "out",
+    "resolveJsonModule": true,
+    "paths": {
+      "react-native": [
+        "./node_modules/react-native-web"
+      ],
+      "uniwind": [
+        "./node_modules/uniwind/dist/module/index.d.ts"
+      ]
+    }
+  },
+  "include": [
+    "src/**/*",
+    "server/**/*",
+    "scripts/**/*",
+    "lambda/**/*",
+    "liftosaur-cdk/**/*",
+    "test/**/*",
+    "tests/**/*",
+    "aihelpers/**/*",
+    "index.native.ts",
+    "devserver.ts",
+    "playwright.config.ts",
+    "uniwind-types.d.ts"
+  ]
+}

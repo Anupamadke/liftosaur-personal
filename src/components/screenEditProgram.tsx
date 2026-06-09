@@ -1,0 +1,53 @@
+import { JSX, memo } from "react";
+import { IDispatch } from "../ducks/types";
+import { EditProgramDaysList } from "./editProgram/editProgramDaysList";
+import { IProgram, ISettings, ISubscription } from "../types";
+import { INavCommon } from "../models/state";
+import { ScreenProgram } from "./editProgram/screenProgram";
+import { IPlannerState } from "../pages/planner/models/types";
+import { NavScreenContent } from "../navigation/NavScreenContent";
+
+interface IProps {
+  helps: string[];
+  dispatch: IDispatch;
+  subscription: ISubscription;
+  settings: ISettings;
+  originalProgram: IProgram;
+  plannerState: IPlannerState;
+  client: Window["fetch"];
+  revisions: string[];
+  isLoggedIn: boolean;
+  navCommon: INavCommon;
+}
+
+export const ScreenEditProgram = memo(function ScreenEditProgram(props: IProps): JSX.Element {
+  const originalProgram = props.originalProgram;
+  const plannerState = props.plannerState;
+
+  if (plannerState.current.program.planner != null) {
+    return (
+      <ScreenProgram
+        client={props.client}
+        revisions={props.revisions}
+        helps={props.helps}
+        settings={props.settings}
+        dispatch={props.dispatch}
+        originalProgram={originalProgram}
+        plannerState={plannerState}
+        isLoggedIn={props.isLoggedIn}
+        navCommon={props.navCommon}
+      />
+    );
+  } else {
+    return (
+      <NavScreenContent>
+        <EditProgramDaysList
+          settings={props.settings}
+          dispatch={props.dispatch}
+          editProgram={originalProgram}
+          navCommon={props.navCommon}
+        />
+      </NavScreenContent>
+    );
+  }
+});

@@ -1,0 +1,182 @@
+import type { JSX } from "react";
+import "../../models/state";
+import { DateUtils_format } from "../../utils/date";
+import { IRecordResponse } from "../../api/service";
+import { Weight_display, Weight_build, Weight_convertTo } from "../../models/weight";
+import { Reps_group } from "../../models/set";
+import { Exercise_get } from "../../models/exercise";
+import { StringUtils_pluralize } from "../../utils/string";
+import { GraphExercise } from "../../components/graphExercise";
+import {
+  History_findAllPersonalRecords,
+  History_getMaxWeightSetFromEntry,
+  History_findPersonalRecord,
+  History_totalEntryWeight,
+  History_totalEntryReps,
+} from "../../models/history";
+import { IHistoryRecord, IHistoryEntry, ISettings, ISet, IUnit } from "../../types";
+
+interface IProps {
+  data: IRecordResponse;
+}
+
+export function RecordContent(props: IProps): JSX.Element {
+  const { record } = props.data;
+  return (
+    <section className="px-4 text-text-primary">
+      <div className="px-4">
+        <h2 className="text-xl font-bold">
+          {record.programName}, {record.dayName}
+        </h2>
+        <p className="text-sm text-text-secondary">{DateUtils_format(record.date)}</p>
+      </div>
+      <PersonalRecords data={props.data} />
+      <MaxWeights data={props.data} />
+      <ul>
+        {record.entries.map((entry) => (
+          <li key={`${entry.exercise.id}_${entry.exercise.equipment}`}>
+            <Entry recordId={record.id} entry={entry} history={props.data.history} settings={props.data.settings} />
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+interface IPersonalRecordsProps {
+  data: IRecordResponse;
+}
+
+function PersonalRecords(props: IPersonalRecordsProps): JSX.Element | null {
+  const { history, record } = props.data;
+  const prs = History_findAllPersonalRecords(record, history);
+
+  if (prs.size > 0) {
+    return (
+      <section className="p-4 my-6 bg-background-cardyellow border border-border-cardyellow rounded-lg">
+        <h3 className="text-lg font-bold" dangerouslySetInnerHTML={{ __html: "&#x1F3C6 New Personal Records" }} />
+        <ul>
+          {Array.from(prs.keys()).map((exerciseType) => {
+            const set = prs.get(exerciseType)!;
+            const exercise = Exercise_get(exerciseType, props.data.settings.exercises);
+            return (
+              <li key={`${exerciseType.id}_${exerciseType.equipment}`}>
+                <strong>{exercise.name}</strong>: <SetView set={set} units={props.data.settings.units} />
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+    );
+  } else {
+    return null;
+  }
+}
+
+interface IMaxWeightsProps {
+  data: IRecordResponse;
+}
+
+function MaxWeights(props: IMaxWeightsProps): JSX.Element {
+  return (
+    <section className="px-4 my-6">
+      <h3
+        className="text-lg font-bold"
+        dangerouslySetInnerHTML={{ __html: "&#x1F3CB Max lifted weights at the workout" }}
+      />
+      <ul>
+        {props.data.record.entries
+          .filter((e) => (History_getMaxWeightSetFromEntry(e)?.completedReps || 0) > 0)
+          .map((entry) => {
+            const exercise = Exercise_get(entry.exercise, props.data.settings.exercises);
+            const set = History_getMaxWeightSetFromEntry(entry)!;
+            return (
+              <li key={`${entry.exercise.id}_${entry.exercise.equipment}`}>
+                <strong>{exercise.name}</strong>: <SetView set={set} units={props.data.settings.units} />
+              </li>
+            );
+          })}
+      </ul>
+    </section>
+  );
+}
+
+interface IEntryProps {
+  history: IHistoryRecord[];
+  recordId: number;
+  entry: IHistoryEntry;
+  settings: ISettings;
+}
+
+function Entry(props: IEntryProps): JSX.Element {
+  const units = props.settings.units;
+  const exercise = Exercise_get(props.entry.exercise, props.settings.exercises);
+  const prSet = History_findPersonalRecord(props.recordId, props.entry, props.history);
+  const setGroups = Reps_group(props.entry.sets);
+
+  const totalWeight = History_totalEntryWeight(props.entry, props.settings.units);
+  const totalReps = History_totalEntryReps(props.entry);
+
+  return (
+    <section className="p-4 my-2 bg-background-subtle border border-border-prominent rounded-lg">
+      <h4 className="text-lg font-bold">{exercise.name}</h4>
+      <div className="flex flex-col sm:flex-row">
+        <div className="flex-1">
+          {prSet != null && (
+            <div className="my-2 text-lg">
+              <strong>🏆 New Personal Record</strong>: <SetView set={prSet} units={units} />
+            </div>
+          )}
+          <p>Completed sets x reps x weight</p>
+          <ul>
+            {setGroups
+              .filter((group) => (group[0]?.completedReps || 0) > 0)
+              .map((group, i) => {
+                let line: string;
+                if (group.length > 1) {
+                  line = `${group.length} x ${group[0].completedReps ?? 0} x ${Weight_display(group[0].completedWeight ?? Weight_build(0, units))}`;
+                } else {
+                  line = `${group[0].completedReps} x ${Weight_display(group[0].completedWeight ?? Weight_build(0, units))}`;
+                }
+                return <li key={i}>{line}</li>;
+              })}
+          </ul>
+          <div className="mt-4">
+            <p>
+              <strong>Total Weight</strong>: {Weight_display(totalWeight)}
+            </p>
+            <p>
+              <strong>Total reps</strong>: {totalReps}
+            </p>
+          </div>
+        </div>
+        <div className="record-graph">
+          <GraphExercise
+            isWithOneRm={true}
+            isWithProgramLines={true}
+            isSameXAxis={false}
+            minX={0}
+            maxX={0}
+            history={props.history}
+            exercise={props.entry.exercise}
+            settings={props.settings}
+          />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+interface ISetProps {
+  set: ISet;
+  units: IUnit;
+}
+
+function SetView({ set, units }: ISetProps): JSX.Element {
+  return (
+    <span className="whitespace-nowrap">
+      {set.completedReps || 0} {StringUtils_pluralize("rep", set.completedReps || 0)} x{" "}
+      {Weight_display(Weight_convertTo(set.completedWeight ?? Weight_build(0, units), units))}
+    </span>
+  );
+}

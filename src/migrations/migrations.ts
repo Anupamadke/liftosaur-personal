@@ -1,0 +1,389 @@
+import { CollectionUtils_sort } from "../utils/collection";
+import { Dialog_alert } from "../utils/dialog";
+import { UidFactory_generateUid } from "../utils/generator";
+import { ObjectUtils_clone, ObjectUtils_keys, ObjectUtils_values } from "../utils/object";
+import { IGraph, IMuscle, ISettings, IStorage } from "../types";
+import { Weight_build } from "../models/weight";
+import { PlannerExerciseEvaluator } from "../pages/planner/plannerExerciseEvaluator";
+import { basicBeginnerProgram } from "../programs/basicBeginnerProgram";
+import { IVersions } from "../models/versionTracker";
+import { Settings_build } from "../models/settings";
+import { Progress_getEntryId } from "../models/progress";
+
+let latestMigrationVersion: number | undefined;
+export function getLatestMigrationVersion(): string {
+  if (latestMigrationVersion == null) {
+    latestMigrationVersion = CollectionUtils_sort(
+      Object.keys(migrations).map((v) => parseInt(v, 10)),
+      (a, b) => b - a
+    )[0];
+  }
+  return latestMigrationVersion.toString();
+}
+
+export const migrations = {
+  "20240720152051_fix_null_entries_set_weights": (aStorage: IStorage): IStorage => {
+    const storage: IStorage = JSON.parse(JSON.stringify(aStorage));
+    for (const historyRecord of storage.history) {
+      for (const entry of historyRecord.entries) {
+        for (const set of entry.sets) {
+          if (set.weight?.value == null) {
+            set.weight = Weight_build(0, storage.settings.units || "lb");
+          }
+        }
+      }
+    }
+    return storage;
+  },
+  "20240906074315_add_original_weight_to_sets": (aStorage: IStorage): IStorage => {
+    const storage: IStorage = JSON.parse(JSON.stringify(aStorage));
+    for (const historyRecord of storage.history) {
+      for (const entry of historyRecord.entries) {
+        for (const set of entry.sets) {
+          set.originalWeight = ObjectUtils_clone(set.weight);
+        }
+        for (const set of entry.warmupSets) {
+          set.originalWeight = ObjectUtils_clone(set.weight);
+        }
+      }
+    }
+    return storage;
+  },
+  "20241101192254_add_deleted_gyms": (aStorage: IStorage): IStorage => {
+    const storage: IStorage = JSON.parse(JSON.stringify(aStorage));
+    storage.settings.deletedGyms = storage.settings.deletedGyms || [];
+    return storage;
+  },
+  "20241207120042_add_reminder_timer": (aStorage: IStorage): IStorage => {
+    const storage: IStorage = JSON.parse(JSON.stringify(aStorage));
+    storage.settings.timers.reminder = storage.settings.timers.reminder ?? 900;
+    return storage;
+  },
+  "20250211073832_switch_to_planner_programs": (aStorage: IStorage): IStorage => {
+    const storage: IStorage = JSON.parse(JSON.stringify(aStorage));
+    const currentProgram = storage.programs.find((p) => p.id === storage.currentProgramId);
+    if (currentProgram && currentProgram.planner == null) {
+      const plannerProgram = storage.programs.find((p) => p.planner != null) || {
+        ...basicBeginnerProgram,
+        id: UidFactory_generateUid(8),
+      };
+      storage.programs.push(plannerProgram);
+      storage.currentProgramId = plannerProgram.id;
+      Dialog_alert(
+        `Old-style programs are not supported anymore, your current program now is '${plannerProgram.name}'`
+      );
+    }
+    return storage;
+  },
+  "20250305183455_cleanup_custom_exercises": (aStorage: IStorage): IStorage => {
+    const storage: IStorage = JSON.parse(JSON.stringify(aStorage));
+    for (const customExerciseKey of ObjectUtils_keys(storage.settings.exercises)) {
+      const customExercise = storage.settings.exercises[customExerciseKey]!;
+      delete customExercise.defaultEquipment;
+      for (const record of storage.history) {
+        for (const entry of record.entries) {
+          if (entry.exercise.id === customExerciseKey) {
+            entry.exercise = { id: customExerciseKey };
+            record.updatedAt = Date.now();
+          }
+        }
+      }
+      for (const key of ObjectUtils_keys(storage.settings.exerciseData)) {
+        if (key.includes(customExerciseKey)) {
+          if (!storage.settings.exerciseData[customExerciseKey]) {
+            const value = storage.settings.exerciseData[key];
+            delete storage.settings.exerciseData[key];
+            storage.settings.exerciseData[customExercise.id] = value;
+          }
+        }
+      }
+    }
+    return storage;
+  },
+  "20250306192146_fix_empty_graphs": (aStorage: IStorage): IStorage => {
+    const storage: IStorage = JSON.parse(JSON.stringify(aStorage));
+    for (const customExerciseKey of ObjectUtils_keys(storage.settings.exercises)) {
+      if (Array.isArray(storage.settings.graphs)) {
+        for (const graph of storage.settings.graphs) {
+          if (graph.type === "exercise" && graph.id.includes(customExerciseKey) && graph.id !== customExerciseKey) {
+            graph.id = customExerciseKey;
+          }
+        }
+      }
+    }
+    return storage;
+  },
+  "20250322014249_add_is_completed": (aStorage: IStorage): IStorage => {
+    const storage: IStorage = JSON.parse(JSON.stringify(aStorage));
+    for (const record of storage.history) {
+      for (const entry of record.entries) {
+        for (const set of entry.sets) {
+          if (set.completedReps != null) {
+            set.isCompleted = set.isCompleted ?? true;
+            set.completedWeight = set.completedWeight ?? ObjectUtils_clone(set.weight);
+          }
+        }
+      }
+    }
+    return storage;
+  },
+  "20250329092730_add_workout_settings": (aStorage: IStorage): IStorage => {
+    const storage: IStorage = JSON.parse(JSON.stringify(aStorage));
+    storage.settings.workoutSettings = storage.settings.workoutSettings || {
+      targetType: "target",
+    };
+    return storage;
+  },
+  "20250331001906_migrate_weights_to_completed_weights": (aStorage: IStorage): IStorage => {
+    const storage: IStorage = JSON.parse(JSON.stringify(aStorage));
+    for (const program of storage.programs) {
+      for (const week of program.planner?.weeks || []) {
+        for (const day of week.days) {
+          const newExerciseStr = PlannerExerciseEvaluator.changeWeightsToCompletedWeights(day.exerciseText);
+          if (newExerciseStr !== day.exerciseText) {
+            day.exerciseText = newExerciseStr;
+          }
+        }
+      }
+    }
+    return storage;
+  },
+  "20250429083937_add_ids_to_planner_weeks_and_days": (aStorage: IStorage): IStorage => {
+    const storage: IStorage = JSON.parse(JSON.stringify(aStorage));
+    for (const program of storage.programs) {
+      for (const week of program.planner?.weeks || []) {
+        week.id = week.id || UidFactory_generateUid(8);
+        for (const day of week.days) {
+          day.id = day.id || UidFactory_generateUid(8);
+        }
+      }
+    }
+    return storage;
+  },
+  "20250704123128_add_vtypes_and_restructure_subscriptions": (aStorage: IStorage): IStorage => {
+    const storage: IStorage = JSON.parse(JSON.stringify(aStorage));
+    if (storage.subscription) {
+      if (!Array.isArray(storage.subscription.apple)) {
+        storage.subscription.apple = ObjectUtils_keys(storage.subscription.apple as Record<string, null>).map(
+          (key) => ({
+            vtype: "subscription_receipt",
+            value: key,
+            id: UidFactory_generateUid(6),
+            createdAt: Date.now(),
+          })
+        );
+      }
+      if (!Array.isArray(storage.subscription.google)) {
+        storage.subscription.google = ObjectUtils_keys(storage.subscription.google as Record<string, null>).map(
+          (key) => ({
+            vtype: "subscription_receipt",
+            value: key,
+            id: UidFactory_generateUid(6),
+            createdAt: Date.now(),
+          })
+        );
+      }
+    }
+
+    for (const program of storage.programs) {
+      program.vtype = program.vtype ?? "program";
+      if (program.planner) {
+        program.planner.vtype = program.planner.vtype ?? "planner";
+      }
+    }
+    for (const record of storage.history) {
+      record.vtype = record.vtype ?? "history_record";
+    }
+    for (const key of ObjectUtils_keys(storage.stats?.weight || {})) {
+      for (const record of storage.stats?.weight[key] || []) {
+        record.vtype = record.vtype ?? "stat";
+      }
+    }
+    for (const key of ObjectUtils_keys(storage.stats?.length || {})) {
+      for (const record of storage.stats?.length[key] || []) {
+        record.vtype = record.vtype ?? "stat";
+      }
+    }
+    for (const key of ObjectUtils_keys(storage.stats?.percentage || {})) {
+      for (const record of storage.stats?.percentage[key] || []) {
+        record.vtype = record.vtype ?? "stat";
+      }
+    }
+    for (const gym of storage.settings.gyms || []) {
+      gym.vtype = gym.vtype ?? "gym";
+      for (const equipment of ObjectUtils_values(gym.equipment)) {
+        if (equipment) {
+          equipment.vtype = equipment.vtype ?? "equipment_data";
+        }
+      }
+    }
+    for (const exercise of ObjectUtils_values(storage.settings.exercises)) {
+      if (exercise) {
+        exercise.vtype = exercise.vtype ?? "custom_exercise";
+      }
+    }
+    if (Array.isArray(storage.settings.graphs || [])) {
+      // @ts-ignore
+      for (const graph of storage.settings.graphs || []) {
+        graph.vtype = graph.vtype ?? "graph";
+      }
+    }
+    return storage;
+  },
+  "20250719104230_add_cloned_at_to_programs": (aStorage: IStorage): IStorage => {
+    const storage: IStorage = JSON.parse(JSON.stringify(aStorage));
+    for (const program of storage.programs) {
+      program.clonedAt = program.clonedAt ?? Date.now() - Math.round(Math.random() * 1000000);
+    }
+    return storage;
+  },
+  "20250720120545_make_graphs_atomic_object": (aStorage: IStorage): IStorage => {
+    const storage: IStorage = JSON.parse(JSON.stringify(aStorage));
+    if (!storage.settings.graphs.vtype) {
+      storage.settings.graphs = {
+        vtype: "graphs",
+        graphs: storage.settings.graphs as unknown as IGraph[],
+      };
+      if ((storage._versions?.settings as IVersions<ISettings>)?.graphs) {
+        // @ts-ignore
+        storage._versions.settings.graphs = Date.now();
+      }
+    }
+    return storage;
+  },
+  "20250815161850_add_gyms_if_empty": (aStorage: IStorage): IStorage => {
+    const storage: IStorage = JSON.parse(JSON.stringify(aStorage));
+    if (storage.settings.gyms && storage.settings.gyms.length === 0) {
+      storage.settings.gyms.push({
+        ...Settings_build().gyms[0],
+      });
+    }
+    return storage;
+  },
+  "20251005115332_migrate_affiliates_to_affiliates_data": (aStorage: IStorage): IStorage => {
+    const storage: IStorage = JSON.parse(JSON.stringify(aStorage));
+    for (const key of Object.keys(storage.affiliates || {})) {
+      const value = storage.affiliates[key];
+      if (typeof value === "number") {
+        storage.affiliates[key] = { id: key, type: "program", timestamp: value, vtype: "affiliate" };
+      }
+    }
+    // @ts-ignore
+    if (storage._versions?.affiliates && !("items" in storage._versions?.affiliates)) {
+      const items = storage._versions.affiliates;
+      storage._versions.affiliates = { items, deleted: {} };
+    }
+    return storage;
+  },
+  "20251030203130_add_muscle_groups": (aStorage: IStorage): IStorage => {
+    const storage: IStorage = JSON.parse(JSON.stringify(aStorage));
+    storage.settings.muscleGroups = storage.settings.muscleGroups || { vtype: "muscle_groups_settings", data: {} };
+    return storage;
+  },
+  "20251230101232_fix_gym_names": (aStorage: IStorage): IStorage => {
+    const storage: IStorage = JSON.parse(JSON.stringify(aStorage));
+    for (const gym of storage.settings.gyms || []) {
+      if (gym.name == null) {
+        gym.name = "Main";
+      }
+    }
+    return storage;
+  },
+  "20251231182918_add_vtypes_and_indexes_to_entries_and_sets": (aStorage: IStorage): IStorage => {
+    const storage: IStorage = JSON.parse(JSON.stringify(aStorage));
+    for (const record of storage.history) {
+      record.vtype = record.vtype || "history_record";
+      const progressUi = record.ui;
+      if (progressUi) {
+        progressUi.vtype = progressUi.vtype || "progress_ui";
+        progressUi.id = UidFactory_generateUid(8);
+      }
+      for (let entryIndex = 0; entryIndex < record.entries.length; entryIndex++) {
+        const entry = record.entries[entryIndex];
+        entry.vtype = entry.vtype || "history_entry";
+        entry.index = entry.index ?? entryIndex;
+        for (let setIndex = 0; setIndex < entry.sets.length; setIndex++) {
+          const set = entry.sets[setIndex];
+          set.vtype = set.vtype || "set";
+          set.index = set.index ?? setIndex;
+        }
+        for (let setIndex = 0; setIndex < entry.warmupSets.length; setIndex++) {
+          const set = entry.warmupSets[setIndex];
+          set.vtype = set.vtype || "set";
+          set.index = set.index ?? setIndex;
+        }
+      }
+    }
+    return storage;
+  },
+  "20260103180023_add_progress_array": (aStorage: IStorage): IStorage => {
+    const storage: IStorage = JSON.parse(JSON.stringify(aStorage));
+    storage.progress = storage.progress || [];
+    return storage;
+  },
+  "20260124114134_convert_muscle_multipliers_to_object": (aStorage: IStorage): IStorage => {
+    const storage: IStorage = JSON.parse(JSON.stringify(aStorage));
+    for (const key of ObjectUtils_keys(storage.settings.exerciseData)) {
+      const exerciseData = storage.settings.exerciseData[key];
+      if (exerciseData?.muscleMultipliers && Array.isArray(exerciseData.muscleMultipliers)) {
+        const oldMultipliers = exerciseData.muscleMultipliers as Array<{ muscle: IMuscle; multiplier: number }>;
+        const newMultipliers: Partial<Record<IMuscle, number>> = {};
+        for (const mm of oldMultipliers) {
+          newMultipliers[mm.muscle] = mm.multiplier;
+        }
+        exerciseData.muscleMultipliers = newMultipliers;
+      }
+    }
+    return storage;
+  },
+  "20260208210220_fill_sets_with_ids": (aStorage: IStorage): IStorage => {
+    const storage: IStorage = JSON.parse(JSON.stringify(aStorage));
+    for (const record of storage.history) {
+      for (const entry of record.entries) {
+        for (const set of entry.sets) {
+          if (!set.id) {
+            set.id = UidFactory_generateUid(6);
+          }
+        }
+        for (const set of entry.warmupSets) {
+          if (!set.id) {
+            set.id = UidFactory_generateUid(6);
+          }
+        }
+      }
+    }
+    for (const record of storage.progress || []) {
+      for (const entry of record.entries) {
+        for (const set of entry.sets) {
+          if (!set.id) {
+            set.id = UidFactory_generateUid(6);
+          }
+        }
+        for (const set of entry.warmupSets) {
+          if (!set.id) {
+            set.id = UidFactory_generateUid(6);
+          }
+        }
+      }
+    }
+    return storage;
+  },
+  "20260304084247_fill_entries_with_ids": (aStorage: IStorage): IStorage => {
+    const storage: IStorage = JSON.parse(JSON.stringify(aStorage));
+    for (const record of storage.history) {
+      for (const entry of record.entries) {
+        if (!entry.id) {
+          entry.id = Progress_getEntryId(entry.exercise);
+        }
+      }
+    }
+    for (const record of storage.progress || []) {
+      for (const entry of record.entries) {
+        if (!entry.id) {
+          entry.id = Progress_getEntryId(entry.exercise);
+        }
+      }
+    }
+    return storage;
+  },
+};

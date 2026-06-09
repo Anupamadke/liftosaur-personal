@@ -1,0 +1,32 @@
+import { IAccount } from "../src/models/account";
+import { IExportedProgram } from "../src/models/program";
+import { ProgramHtml } from "../src/pages/program/programHtml";
+import { IStorage } from "../src/types";
+
+import { renderPage } from "./render";
+
+export function renderProgramHtml(
+  client: Window["fetch"],
+  isMobile: boolean,
+  userAgent: string | undefined,
+  shouldSyncProgram: boolean,
+  program?: IExportedProgram,
+  account?: IAccount,
+  source?: string,
+  storage?: IStorage,
+  revisions: string[] = []
+): string {
+  return renderPage(
+    <ProgramHtml
+      exportedProgram={program}
+      shouldSyncProgram={shouldSyncProgram}
+      isMobile={isMobile}
+      userAgent={userAgent}
+      client={client}
+      account={account}
+      source={source}
+      storage={storage}
+      revisions={revisions}
+    />
+  );
+}

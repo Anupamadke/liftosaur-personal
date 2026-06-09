@@ -1,0 +1,58 @@
+/* purgecss start ignore */
+
+@import "./fonts.css";
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  font-size: 16px;
+  line-height: 1.55em;
+  font-family: Poppins, sans-serif;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+}
+
+#app {
+  flex: 1;
+}
+
+.program-details-exercise-switch {
+  display: none;
+}
+
+@layer base {
+  .block.code,
+  .block.code *,
+  .program-details-description pre,
+  .program-details-description pre *,
+  .program-details-description code,
+  .program-details-description code * {
+    font-family: "Iosevka Web", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+  }
+}
+
+@media (max-width: 600px) {
+  .program-details-exercise-switch {
+    display: block;
+  }
+  .program-details-header,
+  .program-details-settings {
+    flex-direction: column;
+  }
+  .program-details-settings-button {
+    margin-left: 1em;
+  }
+  .program-details-exercise.is-details .program-details-exercise-playground,
+  .program-details-exercise.is-playground .program-details-exercise-image,
+  .program-details-exercise.is-playground .program-details-exercise-content {
+    display: none;
+  }
+}
+
+/* purgecss end ignore */
