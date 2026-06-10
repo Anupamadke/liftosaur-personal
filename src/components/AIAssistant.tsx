@@ -51,7 +51,7 @@ function formatTime(date: Date): string {
 // ---------------------------------------------------------------------------
 // Setup Screen - shown when no API key
 // ---------------------------------------------------------------------------
-function SetupScreen({ onSave }: { onSave: (key: string) => void }) {
+function SetupScreen({ onSave, isDark }: { onSave: (key: string) => void; isDark: boolean }) {
   const [draft, setDraft] = useState("");
   const [error, setError] = useState("");
 
@@ -65,11 +65,15 @@ function SetupScreen({ onSave }: { onSave: (key: string) => void }) {
   };
 
   return (
-    <ScrollView contentContainerStyle={setup.container} keyboardShouldPersistTaps="handled">
+    <ScrollView
+      contentContainerStyle={[setup.container, isDark && { backgroundColor: "#1a1a1a" }]}
+      keyboardShouldPersistTaps="handled"
+      style={{ flex: 1, backgroundColor: isDark ? "#1a1a1a" : "#fff" }}
+    >
       {/* Icon */}
       <Text style={setup.robot}>🤖</Text>
-      <Text style={setup.title}>Set Up AI Coach</Text>
-      <Text style={setup.subtitle}>
+      <Text style={[setup.title, isDark && { color: "#fff" }]}>Set Up AI Coach</Text>
+      <Text style={[setup.subtitle, isDark && { color: "#aaa" }]}>
         AI Coach uses Google Gemini to analyse your workouts and give personalised advice.
         The free tier is more than enough for personal use.
       </Text>
@@ -248,7 +252,11 @@ Give concise, actionable advice. Use metric or imperial units based on their pre
 
   // Show setup screen if no API key
   if (!apiKey) {
-    return <SetupScreen onSave={handleSaveKey} />;
+    return (
+      <View style={{ flex: 1, backgroundColor: isDark ? "#1a1a1a" : "#fff" }}>
+        <SetupScreen onSave={handleSaveKey} isDark={isDark} />
+      </View>
+    );
   }
 
   return (
@@ -340,6 +348,7 @@ Give concise, actionable advice. Use metric or imperial units based on their pre
 // ---------------------------------------------------------------------------
 const setup = StyleSheet.create({
   container: {
+    flexGrow: 1,
     padding: 24,
     paddingBottom: 40,
     backgroundColor: "#fff",
