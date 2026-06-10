@@ -25,7 +25,7 @@ export function NavModalExerciseImageLibrary(): JSX.Element {
       <TransparentModal onClose={onClose}>
         <ExerciseImageLibraryContent
           settings={state.storage.settings}
-          isLoggedIn={!!state.user?.id}
+          isLoggedIn={true} // Personal build
           service={service}
           onClose={onClose}
           onSelect={(smallImageUrl, largeImageUrl) => {

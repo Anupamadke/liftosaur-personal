@@ -74,7 +74,7 @@ export function NavScreenEditProgram(): React.JSX.Element {
   const helps = untrack(state.storage.helps);
   const subscription = untrack(state.storage.subscription);
   const settings = untrack(state.storage.settings);
-  const isLoggedIn = state.user != null;
+  const isLoggedIn = true; // Personal build - always logged in
   return (
     <FallbackScreen state={{ plannerState, editProgram }} dispatch={dispatch}>
       {({ plannerState: plannerState2, editProgram: editProgram2 }) => (

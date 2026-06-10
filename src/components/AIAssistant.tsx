@@ -339,6 +339,22 @@ export function AIAssistant({
         }
       />
 
+      {/* Setup banner - shown when no API key */}
+      {!apiKey && (
+        <TouchableOpacity
+          style={styles.setupBanner}
+          onPress={() => setShowSettings(true)}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.setupBannerEmoji}>🔑</Text>
+          <View style={styles.setupBannerText}>
+            <Text style={styles.setupBannerTitle}>Tap here to set up your free Gemini API key</Text>
+            <Text style={styles.setupBannerSub}>Get it free at aistudio.google.com · Takes 1 minute</Text>
+          </View>
+          <Text style={styles.setupBannerArrow}>›</Text>
+        </TouchableOpacity>
+      )}
+
       {/* Loading indicator */}
       {isLoading && (
         <View style={styles.loadingRow}>
@@ -525,6 +541,26 @@ const styles = StyleSheet.create({
   },
   sendBtnDisabled: { backgroundColor: "#333" },
   sendBtnText: { color: "#fff", fontSize: 20, fontWeight: "700", marginTop: -2 },
+
+  // Setup banner (shown when no API key)
+  setupBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#2a1f00",
+    borderWidth: 1,
+    borderColor: "#7a5c00",
+    borderRadius: 10,
+    marginHorizontal: 12,
+    marginBottom: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 10,
+  },
+  setupBannerEmoji: { fontSize: 22 },
+  setupBannerText: { flex: 1 },
+  setupBannerTitle: { color: "#FFD700", fontSize: 13, fontWeight: "700" },
+  setupBannerSub: { color: "#aaa", fontSize: 11, marginTop: 2 },
+  setupBannerArrow: { color: "#888", fontSize: 22, lineHeight: 24 },
 
   // Modal
   modalOverlay: {

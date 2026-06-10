@@ -24,7 +24,7 @@ export function NavModalExerciseImageSource(): JSX.Element {
   const exerciseId = data?.exerciseId ?? "";
   const appContext = useContext(AppContext);
   const service = appContext.service ?? new Service(fetch);
-  const isLoggedIn = !!state.user?.id;
+  const isLoggedIn = true; // Personal build - always logged in
   const [isUploading, setIsUploading] = useState(false);
 
   const openImageLibrary = useModal("exerciseImageLibraryModal", (result) => {

@@ -33,7 +33,7 @@ export function NavModalCustomExercise(): JSX.Element {
       <TransparentModal onClose={onClose}>
         <BottomSheetCustomExerciseContent
           settings={state.storage.settings}
-          isLoggedIn={!!state.user?.id}
+          isLoggedIn={true} // Personal build
           exercise={exercise}
           dispatch={dispatch}
           onChange={(action, ex, notes) => {

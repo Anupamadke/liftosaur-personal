@@ -198,7 +198,7 @@ export function NavModalExercisePicker(): JSX.Element {
       <TransparentModal onClose={onClose}>
         <ExercisePickerContent
           settings={state.storage.settings}
-          isLoggedIn={!!state.user?.id}
+          isLoggedIn={true} // Personal build
           exercisePicker={exercisePickerState}
           usedExerciseTypes={usedExerciseTypes}
           evaluatedProgram={evaluatedCurrentProgram}
