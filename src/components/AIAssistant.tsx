@@ -57,8 +57,8 @@ function SetupScreen({ onSave, isDark }: { onSave: (key: string) => void; isDark
 
   const handleSave = () => {
     const key = draft.trim();
-    if (!key.startsWith("AIza") || key.length < 20) {
-      setError("Key should start with 'AIza...' - copy it exactly from the site");
+    if (key.length < 20) {
+      setError("Please paste your full API key from Google AI Studio");
       return;
     }
     onSave(key);
@@ -98,7 +98,7 @@ function SetupScreen({ onSave, isDark }: { onSave: (key: string) => void; isDark
         <View style={setup.stepNum}><Text style={setup.stepNumText}>2</Text></View>
         <View style={setup.stepBody}>
           <Text style={setup.stepTitle}>Sign in with Google and click "Get API key"</Text>
-          <Text style={setup.stepDesc}>Then click "Create API key" → copy the key (starts with AIza...)</Text>
+          <Text style={setup.stepDesc}>Then click "Create API key" → copy the full key</Text>
         </View>
       </View>
 
@@ -112,7 +112,7 @@ function SetupScreen({ onSave, isDark }: { onSave: (key: string) => void; isDark
 
       <TextInput
         style={[setup.input, error ? setup.inputError : null]}
-        placeholder="AIza..."
+        placeholder="Paste your API key"
         placeholderTextColor="#666"
         value={draft}
         onChangeText={(t) => { setDraft(t); setError(""); }}
