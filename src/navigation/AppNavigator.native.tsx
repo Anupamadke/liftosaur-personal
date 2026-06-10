@@ -10,6 +10,7 @@ import type {
   IWorkoutStackParamList,
   IGraphsStackParamList,
   IMeStackParamList,
+  IAIStackParamList,
   IRootTabParamList,
   IRootStackParamList,
 } from "./types";
@@ -35,6 +36,7 @@ import {
 } from "./screens/NavScreenOnboarding";
 import { NavScreenProgress, NavScreenFinishDay, NavScreenSubscription } from "./screens/NavScreenWorkout";
 import { NavScreenGraphs } from "./screens/NavScreenGraphs";
+import { NavScreenAI } from "./screens/NavScreenAI";
 import {
   NavScreenSettings,
   NavScreenAccount,
@@ -140,6 +142,7 @@ const ProgramStack = createNativeStackNavigator<IProgramStackParamList>();
 const WorkoutStack = createNativeStackNavigator<IWorkoutStackParamList>();
 const GraphsStack = createNativeStackNavigator<IGraphsStackParamList>();
 const MeStack = createNativeStackNavigator<IMeStackParamList>();
+const AIStack = createNativeStackNavigator<IAIStackParamList>();
 const Tab = createBottomTabNavigator<IRootTabParamList>();
 const RootStack = createNativeStackNavigator<IRootStackParamList>();
 
@@ -304,6 +307,14 @@ function MeStackScreen(): JSX.Element {
   );
 }
 
+function AIStackScreen(): JSX.Element {
+  return (
+    <AIStack.Navigator screenOptions={stackScreenOptions} screenLayout={renderScreenWithErrorBoundary}>
+      <AIStack.Screen name="aiCoach" component={NavScreenAI} />
+    </AIStack.Navigator>
+  );
+}
+
 const tabScreenOptions = { headerShown: false };
 
 function MainTabsScreen(): JSX.Element {
@@ -314,6 +325,7 @@ function MainTabsScreen(): JSX.Element {
       <Tab.Screen name="workout" component={WorkoutStackScreen} />
       <Tab.Screen name="graphs" component={GraphsStackScreen} />
       <Tab.Screen name="me" component={MeStackScreen} />
+      <Tab.Screen name="ai" component={AIStackScreen} />
     </Tab.Navigator>
   );
 }
