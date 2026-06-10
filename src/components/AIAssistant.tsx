@@ -1,19 +1,6 @@
 /**
- * AIAssistant.tsx
- * Drop-in AI chat panel for Liftosaur.
- *
- * Features:
- * - Conversational chat with Gemini
- * - Quick-action buttons (Suggest progression, Analyze progress, etc.)
- * - API key settings modal
- * - Persists API key in MMKV storage
- *
- * Integration:
- *   1. Add this to a new screen or modal in Liftosaur
- *   2. Pass `workoutHistory` from Liftosaur's state
- *   3. Pass `userGoals` if available
- *
- * Deps already in Liftosaur: react-native-mmkv, react-native-safe-area-context
+ * AIAssistant.tsx - AI Coach for Liftosaur (personal build)
+ * Uses Google Gemini (free API from aistudio.google.com)
  */
 
 import React, { useState, useRef, useCallback, useEffect } from "react";
@@ -27,19 +14,15 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Modal,
   ScrollView,
+  Linking,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { createMMKV } from "react-native-mmkv";
-
 import { WorkoutAIAnalyzer, buildWorkoutContext } from "../ai/workoutAnalyzer";
 import type { WorkoutRecord, UserGoals } from "../ai/workoutAnalyzer";
 import { AI_STORAGE_KEYS } from "../ai/geminiService";
 
-// ---------------------------------------------------------------------------
-// Storage
-// ---------------------------------------------------------------------------
 const storage = createMMKV({ id: "liftosaur-ai" });
 
 // ---------------------------------------------------------------------------
@@ -52,24 +35,13 @@ interface Message {
   timestamp: Date;
 }
 
-interface QuickAction {
-  label: string;
-  emoji: string;
-  buildPrompt: () => Promise<string>;
-}
-
 interface AIAssistantProps {
   workoutHistory?: WorkoutRecord[];
   userGoals?: UserGoals;
-  /** Called when user dismisses the panel (if used as modal) */
   onClose?: () => void;
-  /** Dark or light theme */
   theme?: "dark" | "light";
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 function genId(): string {
   return Math.random().toString(36).slice(2);
 }
@@ -79,57 +51,86 @@ function formatTime(date: Date): string {
 }
 
 // ---------------------------------------------------------------------------
-// Settings Modal
+// Setup Screen - shown when no API key
 // ---------------------------------------------------------------------------
-interface SettingsModalProps {
-  visible: boolean;
-  onClose: () => void;
-  onSave: (key: string) => void;
-  currentKey: string;
-}
+function SetupScreen({ onSave }: { onSave: (key: string) => void }) {
+  const [draft, setDraft] = useState("");
+  const [error, setError] = useState("");
 
-function SettingsModal({ visible, onClose, onSave, currentKey }: SettingsModalProps) {
-  const [draft, setDraft] = useState(currentKey);
+  const handleSave = () => {
+    const key = draft.trim();
+    if (!key.startsWith("AIza") || key.length < 20) {
+      setError("Key should start with 'AIza...' - copy it exactly from the site");
+      return;
+    }
+    onSave(key);
+  };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent>
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalCard}>
-          <Text style={styles.modalTitle}>Gemini API Key</Text>
-          <Text style={styles.modalBody}>
-            Get a free key at{" "}
-            <Text style={styles.link}>aistudio.google.com</Text>
-            {"\n\n"}Your key is stored locally on-device only. Never sent anywhere except Google's API.
-          </Text>
-          <TextInput
-            style={styles.keyInput}
-            placeholder="AIza..."
-            placeholderTextColor="#888"
-            value={draft}
-            onChangeText={setDraft}
-            autoCapitalize="none"
-            autoCorrect={false}
-            secureTextEntry
-          />
-          <View style={styles.modalButtons}>
-            <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
-              <Text style={styles.cancelBtnText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.saveBtn, !draft.trim() && styles.saveBtnDisabled]}
-              onPress={() => {
-                if (!draft.trim()) return;
-                onSave(draft.trim());
-                onClose();
-              }}
-              disabled={!draft.trim()}
-            >
-              <Text style={styles.saveBtnText}>Save</Text>
-            </TouchableOpacity>
-          </View>
+    <ScrollView contentContainerStyle={setup.container} keyboardShouldPersistTaps="handled">
+      {/* Icon */}
+      <Text style={setup.robot}>🤖</Text>
+      <Text style={setup.title}>Set Up AI Coach</Text>
+      <Text style={setup.subtitle}>
+        AI Coach uses Google Gemini to analyse your workouts and give personalised advice.
+        The free tier is more than enough for personal use.
+      </Text>
+
+      {/* Step 1 */}
+      <View style={setup.step}>
+        <View style={setup.stepNum}><Text style={setup.stepNumText}>1</Text></View>
+        <View style={setup.stepBody}>
+          <Text style={setup.stepTitle}>Get your free API key</Text>
+          <Text style={setup.stepDesc}>Takes about 1 minute. No credit card needed.</Text>
+          <TouchableOpacity
+            style={setup.linkBtn}
+            onPress={() => Linking.openURL("https://aistudio.google.com/apikey")}
+          >
+            <Text style={setup.linkBtnText}>Open aistudio.google.com →</Text>
+          </TouchableOpacity>
         </View>
       </View>
-    </Modal>
+
+      {/* Step 2 */}
+      <View style={setup.step}>
+        <View style={setup.stepNum}><Text style={setup.stepNumText}>2</Text></View>
+        <View style={setup.stepBody}>
+          <Text style={setup.stepTitle}>Sign in with Google and click "Get API key"</Text>
+          <Text style={setup.stepDesc}>Then click "Create API key" → copy the key (starts with AIza...)</Text>
+        </View>
+      </View>
+
+      {/* Step 3 */}
+      <View style={setup.step}>
+        <View style={setup.stepNum}><Text style={setup.stepNumText}>3</Text></View>
+        <View style={setup.stepBody}>
+          <Text style={setup.stepTitle}>Paste your key below</Text>
+        </View>
+      </View>
+
+      <TextInput
+        style={[setup.input, error ? setup.inputError : null]}
+        placeholder="AIza..."
+        placeholderTextColor="#666"
+        value={draft}
+        onChangeText={(t) => { setDraft(t); setError(""); }}
+        autoCapitalize="none"
+        autoCorrect={false}
+      />
+      {error ? <Text style={setup.errorText}>{error}</Text> : null}
+
+      <TouchableOpacity
+        style={[setup.saveBtn, !draft.trim() && setup.saveBtnDisabled]}
+        onPress={handleSave}
+        disabled={!draft.trim()}
+      >
+        <Text style={setup.saveBtnText}>Save & Start Chatting</Text>
+      </TouchableOpacity>
+
+      <Text style={setup.note}>
+        🔒 Your key is stored only on this phone. It is never sent anywhere except Google's servers.
+      </Text>
+    </ScrollView>
   );
 }
 
@@ -139,22 +140,15 @@ function SettingsModal({ visible, onClose, onSave, currentKey }: SettingsModalPr
 function MessageBubble({ message }: { message: Message }) {
   const isUser = message.role === "user";
   return (
-    <View style={[styles.bubbleRow, isUser ? styles.bubbleRowUser : styles.bubbleRowAI]}>
+    <View style={[bubble.row, isUser ? bubble.rowUser : bubble.rowAI]}>
       {!isUser && (
-        <View style={styles.avatarDot}>
-          <Text style={styles.avatarText}>AI</Text>
+        <View style={bubble.avatar}>
+          <Text style={bubble.avatarText}>AI</Text>
         </View>
       )}
-      <View
-        style={[
-          styles.bubble,
-          isUser ? styles.bubbleUser : styles.bubbleAI,
-        ]}
-      >
-        <Text style={[styles.bubbleText, isUser ? styles.bubbleTextUser : styles.bubbleTextAI]}>
-          {message.text}
-        </Text>
-        <Text style={styles.bubbleTime}>{formatTime(message.timestamp)}</Text>
+      <View style={[bubble.wrap, isUser ? bubble.wrapUser : bubble.wrapAI]}>
+        <Text style={[bubble.text, isUser ? bubble.textUser : bubble.textAI]}>{message.text}</Text>
+        <Text style={bubble.time}>{formatTime(message.timestamp)}</Text>
       </View>
     </View>
   );
@@ -178,20 +172,16 @@ export function AIAssistant({
   const [analyzer, setAnalyzer] = useState<WorkoutAIAnalyzer | null>(
     () => (apiKey ? new WorkoutAIAnalyzer(apiKey) : null)
   );
-
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "welcome",
       role: "assistant",
-      text: apiKey
-        ? "Hi! I'm your AI coach. Ask me anything about your training, or use the quick actions below."
-        : "Set your Gemini API key (tap ⚙️) to get started. It's free at aistudio.google.com",
+      text: "Hi! I'm your AI coach powered by Gemini. Ask me anything about your training, or use the quick actions below. 💪",
       timestamp: new Date(),
     },
   ]);
   const [inputText, setInputText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
 
   const workoutContext = buildWorkoutContext(workoutHistory, 10);
 
@@ -199,132 +189,82 @@ export function AIAssistant({
     storage.set(AI_STORAGE_KEYS.GEMINI_API_KEY, key);
     setApiKey(key);
     setAnalyzer(new WorkoutAIAnalyzer(key));
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: genId(),
-        role: "assistant",
-        text: "API key saved! I'm ready to help with your training.",
-        timestamp: new Date(),
-      },
-    ]);
   }, []);
 
   const addMessage = useCallback((role: "user" | "assistant", text: string) => {
-    setMessages((prev) => [
-      ...prev,
-      { id: genId(), role, text, timestamp: new Date() },
-    ]);
-    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+    setMessages((prev) => [...prev, { id: genId(), role, text, timestamp: new Date() }]);
   }, []);
 
   const sendMessage = useCallback(
     async (text: string) => {
       if (!text.trim() || !analyzer || isLoading) return;
-
-      addMessage("user", text);
       setInputText("");
+      addMessage("user", text);
       setIsLoading(true);
-
       try {
-        const reply = await analyzer.chat(text, workoutContext);
+        const systemPrompt = `You are a knowledgeable, friendly personal fitness coach. 
+The user's recent workout data:\n${workoutContext}\n
+Give concise, actionable advice. Use metric or imperial units based on their preference.`;
+        const reply = await analyzer.gemini.chat(text, [], systemPrompt);
         addMessage("assistant", reply);
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : "Unknown error";
-        addMessage(
-          "assistant",
-          `Error: ${message}. Check your API key in settings.`
-        );
+      } catch (e) {
+        addMessage("assistant", `Sorry, I hit an error: ${String(e)}. Check your API key in Settings.`);
       } finally {
         setIsLoading(false);
       }
     },
-    [analyzer, isLoading, workoutContext, addMessage]
+    [analyzer, isLoading, addMessage, workoutContext]
   );
 
-  // Quick action buttons
-  const quickActions: QuickAction[] = [
+  const quickActions = [
     {
-      emoji: "📈",
-      label: "Next weights",
-      buildPrompt: async () => {
-        if (!analyzer) throw new Error("No API key");
-        return analyzer.suggestProgression(workoutHistory, userGoals);
-      },
-    },
-    {
-      emoji: "📊",
-      label: "Analyze progress",
-      buildPrompt: async () => {
-        if (!analyzer) throw new Error("No API key");
-        return analyzer.analyzeProgress(workoutHistory, userGoals);
-      },
-    },
-    {
-      emoji: "🗓️",
-      label: "Make program",
-      buildPrompt: async () => {
-        if (!analyzer) throw new Error("No API key");
-        return analyzer.generateProgram(
-          userGoals ?? { primaryGoal: "strength", daysPerWeek: 3 }
-        );
-      },
-    },
-    {
+      label: "Suggest Progression",
       emoji: "💪",
-      label: "Deload advice",
-      buildPrompt: async () => {
-        if (!analyzer) throw new Error("No API key");
-        return analyzer.chat(
-          "Based on my training history, do I need a deload? If yes, what should it look like?",
-          workoutContext
-        );
-      },
+      prompt: "Based on my recent workouts, what weights should I increase and by how much?",
+    },
+    {
+      label: "Analyse Progress",
+      emoji: "📊",
+      prompt: "Analyse my recent training progress. What's going well and what needs attention?",
+    },
+    {
+      label: "Deload Check",
+      emoji: "😴",
+      prompt: "Do I need a deload week? Analyse my volume and fatigue from recent sessions.",
+    },
+    {
+      label: "Suggest Program",
+      emoji: "🎯",
+      prompt: "Based on my current lifts and goals, suggest a good training program for me.",
     },
   ];
 
-  const handleQuickAction = useCallback(
-    async (action: QuickAction) => {
-      if (!analyzer || isLoading) return;
-      addMessage("user", action.label);
-      setIsLoading(true);
-      try {
-        const reply = await action.buildPrompt();
-        addMessage("assistant", reply);
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : "Unknown error";
-        addMessage("assistant", `Error: ${message}`);
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [analyzer, isLoading, addMessage]
-  );
-
   const isDark = theme === "dark";
+
+  // Show setup screen if no API key
+  if (!apiKey) {
+    return <SetupScreen onSave={handleSaveKey} />;
+  }
 
   return (
     <KeyboardAvoidingView
-      style={[styles.container, isDark ? styles.containerDark : styles.containerLight]}
+      style={[chat.container, isDark ? chat.dark : chat.light]}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       keyboardVerticalOffset={insets.top + 60}
     >
       {/* Header */}
-      <View style={[styles.header, isDark ? styles.headerDark : styles.headerLight]}>
-        <Text style={[styles.headerTitle, isDark && styles.textLight]}>AI Coach</Text>
-        <View style={styles.headerRight}>
-          <TouchableOpacity
-            onPress={() => setShowSettings(true)}
-            style={styles.headerBtn}
-          >
-            <Text style={styles.headerBtnText}>⚙️</Text>
-          </TouchableOpacity>
-          {onClose && (
-            <TouchableOpacity onPress={onClose} style={styles.headerBtn}>
-              <Text style={styles.headerBtnText}>✕</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+      <View style={[chat.header, isDark ? chat.headerDark : chat.headerLight]}>
+        <Text style={[chat.headerTitle, isDark && chat.textLight]}>🤖 AI Coach</Text>
+        <TouchableOpacity
+          onPress={() => {
+            storage.delete(AI_STORAGE_KEYS.GEMINI_API_KEY);
+            setApiKey("");
+            setAnalyzer(null);
+          }}
+          style={chat.changeKeyBtn}
+        >
+          <Text style={chat.changeKeyBtnText}>Change Key</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Messages */}
@@ -333,35 +273,14 @@ export function AIAssistant({
         data={messages}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => <MessageBubble message={item} />}
-        contentContainerStyle={styles.messageList}
-        onContentSizeChange={() =>
-          flatListRef.current?.scrollToEnd({ animated: false })
-        }
+        contentContainerStyle={chat.messageList}
+        onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
       />
 
-      {/* Setup banner - shown when no API key */}
-      {!apiKey && (
-        <TouchableOpacity
-          style={styles.setupBanner}
-          onPress={() => setShowSettings(true)}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.setupBannerEmoji}>🔑</Text>
-          <View style={styles.setupBannerText}>
-            <Text style={styles.setupBannerTitle}>Tap here to set up your free Gemini API key</Text>
-            <Text style={styles.setupBannerSub}>Get it free at aistudio.google.com · Takes 1 minute</Text>
-          </View>
-          <Text style={styles.setupBannerArrow}>›</Text>
-        </TouchableOpacity>
-      )}
-
-      {/* Loading indicator */}
       {isLoading && (
-        <View style={styles.loadingRow}>
-          <ActivityIndicator size="small" color="#4CAF50" />
-          <Text style={[styles.loadingText, isDark && styles.textLight]}>
-            Thinking...
-          </Text>
+        <View style={chat.loadingRow}>
+          <ActivityIndicator size="small" color="#7c3aed" />
+          <Text style={[chat.loadingText, isDark && chat.textLight]}>Thinking...</Text>
         </View>
       )}
 
@@ -370,67 +289,142 @@ export function AIAssistant({
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          style={styles.quickActionsScroll}
-          contentContainerStyle={styles.quickActionsContent}
+          style={chat.quickScroll}
+          contentContainerStyle={chat.quickContent}
         >
           {quickActions.map((action) => (
             <TouchableOpacity
               key={action.label}
-              style={[styles.quickBtn, !analyzer && styles.quickBtnDisabled]}
-              onPress={() => handleQuickAction(action)}
-              disabled={!analyzer}
+              style={chat.quickBtn}
+              onPress={() => sendMessage(action.prompt)}
             >
-              <Text style={styles.quickBtnEmoji}>{action.emoji}</Text>
-              <Text style={styles.quickBtnLabel}>{action.label}</Text>
+              <Text style={chat.quickEmoji}>{action.emoji}</Text>
+              <Text style={chat.quickLabel}>{action.label}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
       )}
 
       {/* Input */}
-      <View style={[styles.inputRow, isDark ? styles.inputRowDark : styles.inputRowLight]}>
+      <View style={[chat.inputRow, isDark ? chat.inputRowDark : chat.inputRowLight]}>
         <TextInput
-          style={[styles.input, isDark ? styles.inputDark : styles.inputLight]}
-          placeholder={analyzer ? "Ask your coach..." : "Add API key to chat"}
+          style={[chat.input, isDark ? chat.inputDark : chat.inputLight]}
+          placeholder="Ask your coach..."
           placeholderTextColor="#888"
           value={inputText}
           onChangeText={setInputText}
           multiline
           maxLength={500}
-          onSubmitEditing={() => sendMessage(inputText)}
           blurOnSubmit={false}
-          editable={!!analyzer && !isLoading}
+          editable={!isLoading}
         />
         <TouchableOpacity
-          style={[
-            styles.sendBtn,
-            (!inputText.trim() || !analyzer || isLoading) && styles.sendBtnDisabled,
-          ]}
+          style={[chat.sendBtn, (!inputText.trim() || isLoading) && chat.sendBtnOff]}
           onPress={() => sendMessage(inputText)}
-          disabled={!inputText.trim() || !analyzer || isLoading}
+          disabled={!inputText.trim() || isLoading}
         >
-          <Text style={styles.sendBtnText}>↑</Text>
+          <Text style={chat.sendBtnText}>↑</Text>
         </TouchableOpacity>
       </View>
-
-      {/* Settings Modal */}
-      <SettingsModal
-        visible={showSettings}
-        onClose={() => setShowSettings(false)}
-        onSave={handleSaveKey}
-        currentKey={apiKey}
-      />
     </KeyboardAvoidingView>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Styles
+// Setup screen styles
 // ---------------------------------------------------------------------------
-const styles = StyleSheet.create({
+const setup = StyleSheet.create({
+  container: {
+    padding: 24,
+    paddingBottom: 40,
+    backgroundColor: "#fff",
+  },
+  robot: { fontSize: 56, textAlign: "center", marginBottom: 12 },
+  title: { fontSize: 24, fontWeight: "800", textAlign: "center", color: "#1a1a1a", marginBottom: 8 },
+  subtitle: { fontSize: 14, color: "#555", textAlign: "center", lineHeight: 20, marginBottom: 28 },
+  step: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 20,
+    alignItems: "flex-start",
+  },
+  stepNum: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#7c3aed",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 2,
+  },
+  stepNumText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+  stepBody: { flex: 1 },
+  stepTitle: { fontSize: 14, fontWeight: "700", color: "#1a1a1a", marginBottom: 4 },
+  stepDesc: { fontSize: 13, color: "#555", lineHeight: 18 },
+  linkBtn: {
+    marginTop: 8,
+    backgroundColor: "#ede9fe",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    alignSelf: "flex-start",
+  },
+  linkBtnText: { color: "#7c3aed", fontWeight: "600", fontSize: 13 },
+  input: {
+    backgroundColor: "#f3f4f6",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: "#1a1a1a",
+    borderWidth: 1.5,
+    borderColor: "#e5e7eb",
+    marginBottom: 6,
+  },
+  inputError: { borderColor: "#ef4444" },
+  errorText: { color: "#ef4444", fontSize: 12, marginBottom: 8 },
+  saveBtn: {
+    backgroundColor: "#7c3aed",
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  saveBtnDisabled: { backgroundColor: "#c4b5fd" },
+  saveBtnText: { color: "#fff", fontWeight: "700", fontSize: 16 },
+  note: { fontSize: 12, color: "#9ca3af", textAlign: "center", lineHeight: 18 },
+});
+
+// ---------------------------------------------------------------------------
+// Chat screen styles
+// ---------------------------------------------------------------------------
+const bubble = StyleSheet.create({
+  row: { flexDirection: "row", marginVertical: 4, paddingHorizontal: 12 },
+  rowUser: { justifyContent: "flex-end" },
+  rowAI: { justifyContent: "flex-start", gap: 8 },
+  avatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#7c3aed",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 4,
+  },
+  avatarText: { color: "#fff", fontSize: 10, fontWeight: "700" },
+  wrap: { maxWidth: "75%", borderRadius: 16, padding: 10 },
+  wrapUser: { backgroundColor: "#7c3aed", borderBottomRightRadius: 4 },
+  wrapAI: { backgroundColor: "#f3f4f6", borderBottomLeftRadius: 4 },
+  text: { fontSize: 14, lineHeight: 20 },
+  textUser: { color: "#fff" },
+  textAI: { color: "#1a1a1a" },
+  time: { fontSize: 10, color: "#aaa", marginTop: 4, textAlign: "right" },
+});
+
+const chat = StyleSheet.create({
   container: { flex: 1 },
-  containerDark: { backgroundColor: "#1a1a1a" },
-  containerLight: { backgroundColor: "#f5f5f5" },
+  dark: { backgroundColor: "#1a1a1a" },
+  light: { backgroundColor: "#f9fafb" },
 
   header: {
     flexDirection: "row",
@@ -440,74 +434,42 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
   },
-  headerDark: { backgroundColor: "#242424", borderBottomColor: "#333" },
-  headerLight: { backgroundColor: "#fff", borderBottomColor: "#e0e0e0" },
-  headerTitle: { fontSize: 17, fontWeight: "600", color: "#333" },
-  headerRight: { flexDirection: "row", gap: 8 },
-  headerBtn: { padding: 8 },
-  headerBtnText: { fontSize: 18 },
-
-  messageList: { paddingHorizontal: 12, paddingVertical: 8 },
-  bubbleRow: { flexDirection: "row", marginVertical: 4, alignItems: "flex-end" },
-  bubbleRowUser: { justifyContent: "flex-end" },
-  bubbleRowAI: { justifyContent: "flex-start" },
-
-  avatarDot: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: "#4CAF50",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 6,
+  headerDark: { backgroundColor: "#111", borderBottomColor: "#333" },
+  headerLight: { backgroundColor: "#fff", borderBottomColor: "#e5e7eb" },
+  headerTitle: { fontSize: 17, fontWeight: "700", color: "#1a1a1a" },
+  textLight: { color: "#fff" },
+  changeKeyBtn: {
+    backgroundColor: "#ede9fe",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
   },
-  avatarText: { fontSize: 10, color: "#fff", fontWeight: "700" },
+  changeKeyBtnText: { color: "#7c3aed", fontSize: 12, fontWeight: "600" },
 
-  bubble: {
-    maxWidth: "78%",
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  bubbleUser: { backgroundColor: "#4CAF50", borderBottomRightRadius: 4 },
-  bubbleAI: { backgroundColor: "#2c2c2c", borderBottomLeftRadius: 4 },
-
-  bubbleText: { fontSize: 14, lineHeight: 20 },
-  bubbleTextUser: { color: "#fff" },
-  bubbleTextAI: { color: "#e8e8e8" },
-
-  bubbleTime: { fontSize: 10, color: "rgba(255,255,255,0.5)", marginTop: 4, textAlign: "right" },
+  messageList: { paddingVertical: 12, flexGrow: 1 },
 
   loadingRow: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 8,
     paddingHorizontal: 16,
     paddingVertical: 8,
-    gap: 8,
   },
-  loadingText: { fontSize: 13, color: "#888" },
+  loadingText: { color: "#666", fontSize: 13 },
 
-  quickActionsScroll: { maxHeight: 64 },
-  quickActionsContent: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    gap: 8,
-    flexDirection: "row",
-  },
+  quickScroll: { maxHeight: 64 },
+  quickContent: { paddingHorizontal: 12, gap: 8, paddingVertical: 8 },
   quickBtn: {
-    backgroundColor: "#2c2c2c",
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    borderWidth: 1,
-    borderColor: "#444",
+    gap: 6,
+    backgroundColor: "#ede9fe",
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
-  quickBtnDisabled: { opacity: 0.4 },
-  quickBtnEmoji: { fontSize: 14 },
-  quickBtnLabel: { fontSize: 12, color: "#ccc" },
+  quickEmoji: { fontSize: 14 },
+  quickLabel: { color: "#7c3aed", fontSize: 13, fontWeight: "600" },
 
   inputRow: {
     flexDirection: "row",
@@ -517,99 +479,29 @@ const styles = StyleSheet.create({
     gap: 8,
     borderTopWidth: 1,
   },
-  inputRowDark: { backgroundColor: "#242424", borderTopColor: "#333" },
-  inputRowLight: { backgroundColor: "#fff", borderTopColor: "#e0e0e0" },
-
+  inputRowDark: { backgroundColor: "#111", borderTopColor: "#333" },
+  inputRowLight: { backgroundColor: "#fff", borderTopColor: "#e5e7eb" },
   input: {
     flex: 1,
     borderRadius: 20,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 8,
     fontSize: 14,
     maxHeight: 100,
-  },
-  inputDark: { backgroundColor: "#333", color: "#fff" },
-  inputLight: { backgroundColor: "#f0f0f0", color: "#333" },
-
-  sendBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#4CAF50",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  sendBtnDisabled: { backgroundColor: "#333" },
-  sendBtnText: { color: "#fff", fontSize: 20, fontWeight: "700", marginTop: -2 },
-
-  // Setup banner (shown when no API key)
-  setupBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#2a1f00",
     borderWidth: 1,
-    borderColor: "#7a5c00",
-    borderRadius: 10,
-    marginHorizontal: 12,
-    marginBottom: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    gap: 10,
   },
-  setupBannerEmoji: { fontSize: 22 },
-  setupBannerText: { flex: 1 },
-  setupBannerTitle: { color: "#FFD700", fontSize: 13, fontWeight: "700" },
-  setupBannerSub: { color: "#aaa", fontSize: 11, marginTop: 2 },
-  setupBannerArrow: { color: "#888", fontSize: 22, lineHeight: 24 },
-
-  // Modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.7)",
+  inputDark: { backgroundColor: "#222", borderColor: "#444", color: "#fff" },
+  inputLight: { backgroundColor: "#f3f4f6", borderColor: "#e5e7eb", color: "#1a1a1a" },
+  sendBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#7c3aed",
+    alignItems: "center",
     justifyContent: "center",
-    alignItems: "center",
-    padding: 24,
   },
-  modalCard: {
-    backgroundColor: "#242424",
-    borderRadius: 16,
-    padding: 24,
-    width: "100%",
-    maxWidth: 400,
-  },
-  modalTitle: { fontSize: 18, fontWeight: "700", color: "#fff", marginBottom: 12 },
-  modalBody: { fontSize: 13, color: "#aaa", lineHeight: 20, marginBottom: 16 },
-  link: { color: "#4CAF50" },
-  keyInput: {
-    backgroundColor: "#333",
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 14,
-    color: "#fff",
-    marginBottom: 16,
-    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-  },
-  modalButtons: { flexDirection: "row", gap: 12 },
-  cancelBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
-    backgroundColor: "#333",
-    alignItems: "center",
-  },
-  cancelBtnText: { color: "#ccc", fontWeight: "600" },
-  saveBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
-    backgroundColor: "#4CAF50",
-    alignItems: "center",
-  },
-  saveBtnDisabled: { backgroundColor: "#3a6e3a" },
-  saveBtnText: { color: "#fff", fontWeight: "600" },
-
-  textLight: { color: "#fff" },
+  sendBtnOff: { backgroundColor: "#c4b5fd" },
+  sendBtnText: { color: "#fff", fontSize: 18, fontWeight: "700", marginTop: -2 },
 });
 
 export default AIAssistant;
