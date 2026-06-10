@@ -288,8 +288,9 @@ function useRootScreenOptions() {
 
 
 function AIStackScreen(): JSX.Element {
+  const screenOptions = useStackScreenOptions();
   return (
-    <AIStack.Navigator screenOptions={{ headerShown: false, freezeOnBlur: true }}>
+    <AIStack.Navigator screenOptions={{ ...screenOptions, headerShown: false }}>
       <AIStack.Screen name="aiCoach" component={NavScreenAI} />
     </AIStack.Navigator>
   );
