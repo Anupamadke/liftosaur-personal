@@ -23,8 +23,6 @@ import { WorkoutAIAnalyzer, buildWorkoutContext } from "../ai/workoutAnalyzer";
 import type { WorkoutRecord, UserGoals } from "../ai/workoutAnalyzer";
 import { AI_STORAGE_KEYS } from "../ai/geminiService";
 
-const storage = createMMKV({ id: "liftosaur-ai" });
-
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -165,6 +163,13 @@ export function AIAssistant({
 }: AIAssistantProps) {
   const insets = useSafeAreaInsets();
   const flatListRef = useRef<FlatList>(null);
+
+  // Lazy MMKV init - inside component so errors are caught by Error Boundary
+  const storageRef = useRef<ReturnType<typeof createMMKV> | null>(null);
+  if (!storageRef.current) {
+    storageRef.current = createMMKV({ id: "liftosaur-ai" });
+  }
+  const storage = storageRef.current;
 
   const [apiKey, setApiKey] = useState<string>(
     () => storage.getString(AI_STORAGE_KEYS.GEMINI_API_KEY) ?? ""
